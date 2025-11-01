@@ -25,6 +25,7 @@ pub struct ClippyApp {
     start_time: Instant, // Время запуска приложения
     greeting_shown: bool, // Флаг, было ли показано приветственное сообщение
     window_positioned: bool, // Флаг, была ли установлена позиция окна
+    cloud_visible: bool, // Флаг видимости облака
 }
 
 impl ClippyApp {
@@ -51,6 +52,7 @@ impl ClippyApp {
             start_time: Instant::now(),
             greeting_shown: false,
             window_positioned: false,
+            cloud_visible: true,
         }
     }
     
@@ -216,6 +218,160 @@ impl ClippyApp {
             ctx_clone.request_repaint();
         });
     }
+
+    /// Рисует кнопку закрытия облака (маленький круг сверху-справа)
+    fn draw_close_button(&mut self, ctx: &egui::Context, cloud_rect: egui::Rect) {
+        let button_size = 24.0; // размер кнопки
+        let padding = 8.0; // отступ от края облака
+
+        // Позиция: сверху-справа над облаком
+        let button_pos = egui::pos2(
+            cloud_rect.max.x - padding - button_size / 2.0,
+            cloud_rect.min.y - padding - button_size / 2.0,
+        );
+
+        let button_rect = egui::Rect::from_center_size(button_pos, egui::vec2(button_size, button_size));
+
+        // Проверяем нажатие на кнопку в интерактивной зоне
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("close_button")));
+
+        // Получаем позицию мыши
+        if let Some(mouse_pos) = ctx.input(|i| i.pointer.latest_pos()) {
+            // Проверяем, находится ли мышь над кнопкой
+            if button_rect.contains(mouse_pos) {
+                // Меняем курсор на pointer
+                ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+
+                // Проверяем нажатие левой кнопки мыши
+                if ctx.input(|i| i.pointer.primary_clicked()) {
+                    self.cloud_visible = false;
+                    ctx.request_repaint();
+                }
+
+                // Рисуем кнопку в состоянии hover (более яркая)
+                painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(200, 50, 50));
+                painter.circle_stroke(
+                    button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(2.0, egui::Color32::from_rgb(150, 30, 30)),
+                );
+            } else {
+                // Рисуем кнопку в нормальном состоянии
+                painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(180, 50, 50));
+                painter.circle_stroke(
+                    button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(1.5, egui::Color32::from_rgb(130, 30, 30)),
+                );
+            }
+        } else {
+            // Рисуем кнопку в нормальном состоянии
+            painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(180, 50, 50));
+            painter.circle_stroke(
+                button_pos,
+                button_size / 2.0,
+                egui::Stroke::new(1.5, egui::Color32::from_rgb(130, 30, 30)),
+            );
+        }
+
+        // Рисуем крестик (×) в центре кнопки
+        let cross_size = 8.0;
+        let cross_color = egui::Color32::WHITE;
+
+        // Линия 1: \
+        painter.line_segment(
+            [
+                egui::pos2(button_pos.x - cross_size, button_pos.y - cross_size),
+                egui::pos2(button_pos.x + cross_size, button_pos.y + cross_size),
+            ],
+            egui::Stroke::new(2.0, cross_color),
+        );
+
+        // Линия 2: /
+        painter.line_segment(
+            [
+                egui::pos2(button_pos.x + cross_size, button_pos.y - cross_size),
+                egui::pos2(button_pos.x - cross_size, button_pos.y + cross_size),
+            ],
+            egui::Stroke::new(2.0, cross_color),
+        );
+    }
+
+    /// Рисует маленькую кнопку открытия облака рядом с картинкой
+    fn draw_show_button(&mut self, ctx: &egui::Context, image_rect: egui::Rect) {
+        let button_size = 20.0; // маленький размер
+        let padding = 5.0;
+
+        // Позиция: слева-сверху от картинки
+        let button_pos = egui::pos2(
+            image_rect.min.x - padding - button_size / 2.0,
+            image_rect.min.y + padding + button_size / 2.0,
+        );
+
+        let button_rect = egui::Rect::from_center_size(button_pos, egui::vec2(button_size, button_size));
+
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("show_button")));
+
+        // Получаем позицию мыши
+        if let Some(mouse_pos) = ctx.input(|i| i.pointer.latest_pos()) {
+            // Проверяем, находится ли мышь над кнопкой
+            if button_rect.contains(mouse_pos) {
+                ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+
+                // Проверяем нажатие левой кнопки мыши
+                if ctx.input(|i| i.pointer.primary_clicked()) {
+                    self.cloud_visible = true;
+                    ctx.request_repaint();
+                }
+
+                // Рисуем кнопку в состоянии hover (более яркая)
+                painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(50, 150, 200));
+                painter.circle_stroke(
+                    button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(1.5, egui::Color32::from_rgb(30, 100, 150)),
+                );
+            } else {
+                // Рисуем кнопку в нормальном состоянии
+                painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(40, 130, 180));
+                painter.circle_stroke(
+                    button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(1.5, egui::Color32::from_rgb(20, 80, 130)),
+                );
+            }
+        } else {
+            // Рисуем кнопку в нормальном состоянии
+            painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(40, 130, 180));
+            painter.circle_stroke(
+                button_pos,
+                button_size / 2.0,
+                egui::Stroke::new(1.5, egui::Color32::from_rgb(20, 80, 130)),
+            );
+        }
+
+        // Рисуем плюсик (+) в центре кнопки
+        let plus_size = 6.0;
+        let plus_color = egui::Color32::WHITE;
+
+        // Вертикальная линия
+        painter.line_segment(
+            [
+                egui::pos2(button_pos.x, button_pos.y - plus_size),
+                egui::pos2(button_pos.x, button_pos.y + plus_size),
+            ],
+            egui::Stroke::new(1.5, plus_color),
+        );
+
+        // Горизонтальная линия
+        painter.line_segment(
+            [
+                egui::pos2(button_pos.x - plus_size, button_pos.y),
+                egui::pos2(button_pos.x + plus_size, button_pos.y),
+            ],
+            egui::Stroke::new(1.5, plus_color),
+        );
+    }
 }
 
 impl eframe::App for ClippyApp {
@@ -375,16 +531,25 @@ impl eframe::App for ClippyApp {
                 .filter(|(s, _)| s == "clippy")
                 .map(|(_, t)| t.as_str()),
         ) {
-            talk_cloud::show_talk_cloud_side(
-                ctx,
-                text,
-                image_rect,                 // В экранных координатах
-                110,                        // ~110 символов в строке
-                120.0,                      // макс. высота видимой области (px)
-                20.0,                       // зазор до картинки
-                true,                       // prefer_left: старайся ставить слева (картинка теперь справа)
-                egui::FontId::proportional(16.0),
-            );
+            // Показываем облако только если оно видимо
+            if self.cloud_visible {
+                let cloud_rect = talk_cloud::show_talk_cloud_side(
+                    ctx,
+                    text,
+                    image_rect,                 // В экранных координатах
+                    110,                        // ~110 символов в строке
+                    120.0,                      // макс. высота видимой области (px)
+                    20.0,                       // зазор до картинки
+                    true,                       // prefer_left: старайся ставить слева (картинка теперь справа)
+                    egui::FontId::proportional(16.0),
+                );
+
+                // Рисуем кнопку закрытия над облаком
+                self.draw_close_button(ctx, cloud_rect);
+            } else {
+                // Показываем маленькую кнопку, чтобы открыть облако снова
+                self.draw_show_button(ctx, image_rect);
+            }
         }
         
         // Скрытый чат для работы - обрабатываем сообщения, но не показываем UI
