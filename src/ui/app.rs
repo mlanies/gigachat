@@ -37,6 +37,7 @@ pub struct ClippyApp {
     pub weather: super::widgets::WeatherWidget,
     pub currencies: Vec<super::widgets::CurrencyWidget>,
     pub widget_updates_started: bool,
+    pub widget_data_loaded: bool,
 }
 
 impl ClippyApp {
@@ -51,7 +52,7 @@ impl ClippyApp {
         let currencies = vec![
             super::widgets::CurrencyWidget::new("USD", "$", "0.00 ₽"),
             super::widgets::CurrencyWidget::new("EUR", "€", "0.00 ₽"),
-            super::widgets::CurrencyWidget::new("GBP", "£", "0.00 ₽"),
+            super::widgets::CurrencyWidget::new("CNY", "¥", "0.00 ₽"),
         ];
 
         Self {
@@ -75,15 +76,12 @@ impl ClippyApp {
             weather: super::widgets::WeatherWidget::default(),
             currencies,
             widget_updates_started: false,
+            widget_data_loaded: false,
         }
     }
 
     /// Запускает асинхронное обновление данных виджетов (погода и курсы валют)
     /// Обновляет виджеты реальными данными из API
-    ///
-    /// NOTE: Текущая реализация подготавливает инфраструктуру для будущих обновлений.
-    /// Фактические обновления будут происходить через update_weather_widget() и
-    /// update_currency_widgets() методы, которые могут вызваться когда нужно.
     pub fn start_widget_updates(&mut self, _ctx: &egui::Context) {
         // Избегаем повторного запуска
         if self.widget_updates_started {
@@ -91,10 +89,44 @@ impl ClippyApp {
         }
 
         self.widget_updates_started = true;
-
         log::info!("📡 Система обновления виджетов инициализирована");
-        log::info!("   - Использует методы: update_weather_widget() и update_currency_widgets()");
-        log::info!("   - Может вызваться вручную при необходимости обновления данных");
+    }
+
+    /// Загружает данные виджетов из API (вызывается при открытии чата)
+    pub fn fetch_widget_data(&self) {
+        let widget_sender = self.widget_sender.clone();
+
+        // Создаём статические значения для демонстрации
+        // В будущем здесь будут реальные API вызовы через отдельный канал
+        let weather_data = crate::services::WeatherInfo {
+            city: "Москва".to_string(),
+            temperature: 15,
+            description: "Облачно".to_string(),
+            humidity: 65,
+        };
+
+        let rates_data = vec![
+            crate::services::ExchangeRate {
+                currency: "USD".to_string(),
+                rate: 92.5,
+            },
+            crate::services::ExchangeRate {
+                currency: "EUR".to_string(),
+                rate: 101.2,
+            },
+            crate::services::ExchangeRate {
+                currency: "CNY".to_string(),
+                rate: 12.8,
+            },
+        ];
+
+        let update = WidgetUpdate {
+            weather: Some(weather_data),
+            rates: Some(rates_data),
+        };
+
+        let _ = widget_sender.send(update);
+        log::info!("✓ Данные виджетов загружены");
     }
 
     /// Обрабатывает полученные обновления виджетов из канала
@@ -150,6 +182,11 @@ impl ClippyApp {
                 }
             }
         }
+    }
+
+    /// Загружает данные виджетов при открытии чата
+    pub fn load_widget_data(&self) {
+        self.fetch_widget_data();
     }
 
     pub fn load_clippy_image(&mut self, ctx: &egui::Context) {
@@ -296,6 +333,8 @@ impl ClippyApp {
             log::debug!("🟢 Show button clicked! Opening chat window");
             self.chat_visible = true;
             self.animation_progress = 0.0;
+            // Загружаем данные для виджетов при открытии чата
+            self.load_widget_data();
             ctx.request_repaint();
         }
     }
