@@ -1,7 +1,7 @@
-use crate::agent::ClippyAgent;
+use crate::core::ClippyAgent;
 use crate::config::Config;
-use crate::tts::TextToSpeech;
-use crate::talk_cloud;
+use crate::core::TextToSpeech;
+use crate::ui;
 use eframe::egui;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -518,7 +518,7 @@ impl eframe::App for ClippyApp {
         ) {
             // Показываем облако только если оно видимо
             if self.cloud_visible {
-                let cloud_rect = talk_cloud::show_talk_cloud_side(
+                let cloud_rect = ui::show_talk_cloud_side(
                     ctx,
                     text,
                     image_rect,                 // В экранных координатах
