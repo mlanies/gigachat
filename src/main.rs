@@ -8,7 +8,7 @@ mod gui;
 mod logger;
 
 use config::Config;
-use gui::ClippyApp;
+use ui::ClippyApp;
 use eframe::NativeOptions;
 
 fn main() -> Result<(), eframe::Error> {

@@ -1,4 +1,7 @@
 pub mod chat_bubble;
 pub mod components;
+pub mod app;
+pub mod chat;
+pub mod buttons;
 
-pub use chat_bubble::show_talk_cloud_side;
+pub use app::ClippyApp;
