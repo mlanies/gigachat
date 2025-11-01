@@ -275,6 +275,82 @@ impl ClippyApp {
         }
     }
 
+    /// Рисует кнопку открытия облака (маленький синий круг + рядом с картинкой)
+    fn draw_show_button(&mut self, ctx: &egui::Context, image_rect: egui::Rect) {
+        let button_size = 20.0; // маленький размер
+        let padding = 5.0;
+
+        // Позиция: слева-сверху от картинки
+        let button_pos = egui::pos2(
+            image_rect.min.x - padding - button_size / 2.0,
+            image_rect.min.y + padding + button_size / 2.0,
+        );
+
+        let button_rect = egui::Rect::from_center_size(button_pos, egui::vec2(button_size + 4.0, button_size + 4.0));
+
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("show_button")));
+
+        // Получаем позицию мыши
+        if let Some(mouse_pos) = ctx.input(|i| i.pointer.latest_pos()) {
+            // Проверяем, находится ли мышь над кнопкой
+            if button_rect.contains(mouse_pos) {
+                ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+
+                // Проверяем нажатие левой кнопки мыши
+                if ctx.input(|i| i.pointer.primary_clicked()) {
+                    self.cloud_visible = true;
+                    ctx.request_repaint();
+                }
+
+                // Рисуем кнопку в состоянии hover (более яркая)
+                painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(50, 150, 200));
+                painter.circle_stroke(
+                    button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(1.5, egui::Color32::from_rgb(30, 100, 150)),
+                );
+            } else {
+                // Рисуем кнопку в нормальном состоянии
+                painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(40, 130, 180));
+                painter.circle_stroke(
+                    button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(1.5, egui::Color32::from_rgb(20, 80, 130)),
+                );
+            }
+        } else {
+            // Рисуем кнопку в нормальном состоянии
+            painter.circle_filled(button_pos, button_size / 2.0, egui::Color32::from_rgb(40, 130, 180));
+            painter.circle_stroke(
+                button_pos,
+                button_size / 2.0,
+                egui::Stroke::new(1.5, egui::Color32::from_rgb(20, 80, 130)),
+            );
+        }
+
+        // Рисуем плюсик (+) в центре кнопки
+        let plus_size = 6.0;
+        let plus_color = egui::Color32::WHITE;
+
+        // Вертикальная линия
+        painter.line_segment(
+            [
+                egui::pos2(button_pos.x, button_pos.y - plus_size),
+                egui::pos2(button_pos.x, button_pos.y + plus_size),
+            ],
+            egui::Stroke::new(1.5, plus_color),
+        );
+
+        // Горизонтальная линия
+        painter.line_segment(
+            [
+                egui::pos2(button_pos.x - plus_size, button_pos.y),
+                egui::pos2(button_pos.x + plus_size, button_pos.y),
+            ],
+            egui::Stroke::new(1.5, plus_color),
+        );
+    }
+
 }
 
 impl eframe::App for ClippyApp {
@@ -455,6 +531,9 @@ impl eframe::App for ClippyApp {
 
                 // Рисуем кнопку закрытия над облаком
                 self.draw_close_button(ctx, cloud_rect);
+            } else {
+                // Показываем кнопку + чтобы открыть облако снова
+                self.draw_show_button(ctx, image_rect);
             }
         }
         
