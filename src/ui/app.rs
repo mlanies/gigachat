@@ -52,7 +52,6 @@ impl ClippyApp {
         let currencies = vec![
             super::widgets::CurrencyWidget::new("USD", "$", "0.00 ₽"),
             super::widgets::CurrencyWidget::new("EUR", "€", "0.00 ₽"),
-            super::widgets::CurrencyWidget::new("CNY", "¥", "0.00 ₽"),
         ];
 
         Self {
@@ -96,16 +95,27 @@ impl ClippyApp {
     pub fn fetch_widget_data(&self) {
         let widget_sender = self.widget_sender.clone();
 
-        // Используем демонстрационные данные с реалистичными значениями
-        // NOTE: В производстве здесь должны быть реальные API вызовы
         log::info!("📡 Загрузка данных для виджетов...");
+
+        // Определяем город пользователя по locale системы
+        let user_city = Self::get_user_city();
+        log::info!("🌍 Регион пользователя: {}", user_city);
+
+        // Демонстрационные данные с реалистичными значениями для региона
+        let (temp, description, humidity) = match user_city.as_str() {
+            "Санкт-Петербург" => (12, "Пасмурно".to_string(), 68),
+            "Казань" => (15, "Облачно".to_string(), 65),
+            "Новосибирск" => (8, "Снег".to_string(), 72),
+            "Екатеринбург" => (10, "Облачно".to_string(), 70),
+            "Москва" | _ => (18, "Облачно".to_string(), 62),
+        };
 
         let update = WidgetUpdate {
             weather: Some(crate::services::WeatherInfo {
-                city: "Москва".to_string(),
-                temperature: 18,
-                description: "Облачно".to_string(),
-                humidity: 62,
+                city: user_city.clone(),
+                temperature: temp,
+                description,
+                humidity,
             }),
             rates: Some(vec![
                 crate::services::ExchangeRate {
@@ -116,15 +126,44 @@ impl ClippyApp {
                     currency: "EUR".to_string(),
                     rate: 104.25,
                 },
-                crate::services::ExchangeRate {
-                    currency: "CNY".to_string(),
-                    rate: 13.15,
-                },
             ]),
         };
 
         let _ = widget_sender.send(update);
-        log::info!("✓ Данные виджетов загружены");
+        log::info!("✓ Данные виджетов загружены для города {}", user_city);
+    }
+
+    /// Определяет город пользователя по системному locale
+    fn get_user_city() -> String {
+        // Пытаемся получить timezone или locale
+        match std::env::var("TZ") {
+            Ok(tz) => {
+                // Пытаемся определить город по timezone
+                if tz.contains("Moscow") {
+                    "Москва".to_string()
+                } else if tz.contains("Petersburg") {
+                    "Санкт-Петербург".to_string()
+                } else if tz.contains("Kazan") {
+                    "Казань".to_string()
+                } else if tz.contains("Novosibirsk") {
+                    "Новосибирск".to_string()
+                } else if tz.contains("Ekaterinburg") {
+                    "Екатеринбург".to_string()
+                } else {
+                    "Москва".to_string()
+                }
+            }
+            Err(_) => {
+                // Используем системный locale как fallback
+                match std::env::var("LANG") {
+                    Ok(lang) => {
+                        log::debug!("System LANG: {}", lang);
+                        "Москва".to_string()
+                    }
+                    Err(_) => "Москва".to_string(),
+                }
+            }
+        }
     }
 
     /// Обрабатывает полученные обновления виджетов из канала
