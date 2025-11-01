@@ -706,8 +706,109 @@ impl eframe::App for ClippyApp {
             }
         }
         
-        // Скрытый чат для работы - обрабатываем сообщения, но не показываем UI
-        // Сообщения обрабатываются через hotkeys или автоматически
+        // Показываем простой интерфейс для ввода текста (если облако видимо)
+        if self.cloud_visible {
+            self.draw_input_interface(ctx);
+        }
     }
 }
 
+impl ClippyApp {
+    /// Рисует интерфейс для ввода сообщений
+    fn draw_input_interface(&mut self, ctx: &egui::Context) {
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("input_interface")));
+        let screen_rect = ctx.screen_rect();
+
+        // Нижняя панель для ввода
+        let input_height = 50.0;
+        let padding = 10.0;
+        let input_rect = egui::Rect::from_min_max(
+            egui::pos2(screen_rect.min.x + padding, screen_rect.max.y - input_height - padding),
+            egui::pos2(screen_rect.max.x - padding, screen_rect.max.y - padding),
+        );
+
+        // Фон панели ввода
+        painter.rect_filled(input_rect, 8.0, egui::Color32::from_rgb(240, 240, 240));
+        painter.rect_stroke(input_rect, 8.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(180, 180, 180)), egui::epaint::StrokeKind::Outside);
+
+        // Текстовое поле на Foreground слое (через egui::Area для интерактивности)
+        let input_area_rect = egui::Rect::from_min_max(
+            egui::pos2(input_rect.min.x + padding, input_rect.min.y + 8.0),
+            egui::pos2(input_rect.max.x - 60.0, input_rect.max.y - 8.0),
+        );
+
+        // Кнопка отправки
+        let send_button_rect = egui::Rect::from_min_max(
+            egui::pos2(input_rect.max.x - 50.0, input_rect.min.y + 8.0),
+            egui::pos2(input_rect.max.x - 10.0, input_rect.max.y - 8.0),
+        );
+
+        // Проверяем наведение на кнопку отправки
+        let send_hovered = ctx.input(|i| i.pointer.latest_pos())
+            .map(|p| send_button_rect.contains(p))
+            .unwrap_or(false);
+
+        // Рисуем кнопку отправки
+        painter.rect_filled(
+            send_button_rect,
+            4.0,
+            if send_hovered {
+                egui::Color32::from_rgb(100, 200, 100)
+            } else {
+                egui::Color32::from_rgb(80, 180, 80)
+            },
+        );
+
+        painter.text(
+            send_button_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "↑",
+            egui::FontId::proportional(20.0),
+            egui::Color32::WHITE,
+        );
+
+        // Проверяем клик на кнопку отправки
+        if send_hovered && ctx.input(|i| i.pointer.primary_clicked()) {
+            self.send_message(ctx);
+            ctx.request_repaint();
+        }
+
+        // Показываем текущий статус или подсказку
+        let hint_text = if self.is_thinking {
+            "Думаю..."
+        } else if self.input_text.is_empty() {
+            "Введите сообщение..."
+        } else {
+            ""
+        };
+
+        if !hint_text.is_empty() && self.input_text.is_empty() {
+            painter.text(
+                input_area_rect.min + egui::vec2(8.0, 12.0),
+                egui::Align2::LEFT_CENTER,
+                hint_text,
+                egui::FontId::proportional(14.0),
+                egui::Color32::from_rgb(160, 160, 160),
+            );
+        }
+
+        // Area для интерактивного текстового ввода
+        egui::Area::new(egui::Id::new("input_field_area"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(input_area_rect.min)
+            .show(ctx, |ui| {
+                ui.set_width(input_area_rect.width());
+                ui.set_height(input_area_rect.height());
+
+                ui.horizontal(|ui| {
+                    // Используем TextEdit для ввода
+                    let response = ui.text_edit_singleline(&mut self.input_text);
+
+                    // Проверяем Enter для отправки сообщения
+                    if response.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        self.send_message(ctx);
+                    }
+                });
+            });
+    }
+}
