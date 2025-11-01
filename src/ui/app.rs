@@ -192,18 +192,12 @@ impl ClippyApp {
         });
     }
 
-    pub fn draw_send_button(&mut self, ctx: &egui::Context, image_rect: egui::Rect) {
-        log::debug!("🔘 Drawing send button at position: {:?}", image_rect.max);
-        if buttons::draw_send_button(ctx, image_rect) {
-            log::debug!("🔘 Send button clicked!");
-            if !self.chat_visible {
-                self.chat_visible = true;
-                self.animation_progress = 0.0;
-                ctx.request_repaint();
-            } else {
-                self.send_message(ctx);
-                ctx.request_repaint();
-            }
+    pub fn draw_show_button(&mut self, ctx: &egui::Context, image_rect: egui::Rect) {
+        if buttons::draw_show_button(ctx, image_rect) {
+            log::debug!("🟢 Show button clicked! Opening chat window");
+            self.chat_visible = true;
+            self.animation_progress = 0.0;
+            ctx.request_repaint();
         }
     }
 
