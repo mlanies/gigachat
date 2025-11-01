@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::gigachat::GigaChatClient;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -35,13 +36,29 @@ struct Choice {
 pub struct ClippyAgent {
     config: Config,
     conversation_history: VecDeque<Message>,
+    gigachat_client: Option<GigaChatClient>,
 }
 
 impl ClippyAgent {
     pub fn new(config: Config) -> Self {
+        // Пытаемся создать GigaChat клиент если доступен API ключ
+        let gigachat_client = config.gigachat_api_key.as_ref().and_then(|key| {
+            if key.is_empty() {
+                None
+            } else {
+                Some(GigaChatClient::new(
+                    key.clone(),
+                    Some(config.gigachat_model.clone()),
+                    Some(config.gigachat_temperature),
+                    Some(config.gigachat_max_tokens),
+                ))
+            }
+        });
+
         Self {
             config,
             conversation_history: VecDeque::new(),
+            gigachat_client,
         }
     }
 
@@ -50,35 +67,61 @@ impl ClippyAgent {
             return "Чем могу помочь?".to_string();
         }
 
-        if self.config.use_openai {
-            self.get_openai_response(user_input).await
-        } else {
-            self.get_local_response(user_input)
+        // Приоритет: GigaChat → OpenAI → Local
+        if let Some(client) = &mut self.gigachat_client {
+            match client.get_response(user_input).await {
+                Ok(response) => {
+                    self.conversation_history.push_back(Message {
+                        role: "user".to_string(),
+                        content: user_input.to_string(),
+                    });
+                    self.conversation_history.push_back(Message {
+                        role: "assistant".to_string(),
+                        content: response.clone(),
+                    });
+
+                    // Ограничиваем историю 10 сообщениями
+                    while self.conversation_history.len() > 10 {
+                        self.conversation_history.pop_front();
+                    }
+
+                    return response;
+                }
+                Err(e) => {
+                    eprintln!("GigaChat ошибка: {}", e);
+                    // Fallback на OpenAI или Local
+                }
+            }
         }
+
+        // Fallback на OpenAI
+        if self.config.use_openai && self.config.openai_api_key.is_some() {
+            return self.get_openai_response(user_input).await;
+        }
+
+        // Fallback на Local
+        self.get_local_response(user_input)
     }
 
     async fn get_openai_response(&mut self, user_input: &str) -> String {
         let api_key = match &self.config.openai_api_key {
             Some(key) => key,
-            None => return "Ошибка: API ключ не настроен".to_string(),
+            None => return "OpenAI API ключ не установлен".to_string(),
         };
 
-        let mut messages = vec![OpenAIMessage {
-            role: "system".to_string(),
-            content: self.config.system_prompt.clone(),
-        }];
-
-        for msg in self.conversation_history.iter().take(10) {
-            messages.push(OpenAIMessage {
-                role: msg.role.clone(),
-                content: msg.content.clone(),
-            });
-        }
-
-        messages.push(OpenAIMessage {
+        self.conversation_history.push_back(Message {
             role: "user".to_string(),
             content: user_input.to_string(),
         });
+
+        let messages: Vec<OpenAIMessage> = self
+            .conversation_history
+            .iter()
+            .map(|m| OpenAIMessage {
+                role: m.role.clone(),
+                content: m.content.clone(),
+            })
+            .collect();
 
         let request = OpenAIRequest {
             model: "gpt-3.5-turbo".to_string(),
@@ -88,90 +131,84 @@ impl ClippyAgent {
         };
 
         let client = reqwest::Client::new();
-        let response = client
+        let response = match client
             .post("https://api.openai.com/v1/chat/completions")
             .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
             .json(&request)
             .send()
-            .await;
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                eprintln!("OpenAI запрос ошибка: {}", e);
+                return "Ошибка связи с OpenAI".to_string();
+            }
+        };
 
-        match response {
-            Ok(resp) => {
-                match resp.json::<serde_json::Value>().await {
-                    Ok(json) => {
-                        if let Some(choices) = json.get("choices").and_then(|c| c.as_array()) {
-                            if let Some(first_choice) = choices.first() {
-                                if let Some(content) = first_choice
-                                    .get("message")
-                                    .and_then(|m| m.get("content"))
-                                    .and_then(|c| c.as_str())
-                                {
-                                    let assistant_response = content.to_string();
-                                    
-                                    self.conversation_history.push_back(Message {
-                                        role: "user".to_string(),
-                                        content: user_input.to_string(),
-                                    });
-                                    self.conversation_history.push_back(Message {
-                                        role: "assistant".to_string(),
-                                        content: assistant_response.clone(),
-                                    });
-                                    
-                                    return assistant_response;
-                                }
-                            }
-                        }
-                        "Ошибка при обработке ответа от OpenAI".to_string()
+        match response.json::<OpenAIResponse>().await {
+            Ok(openai_resp) => {
+                if let Some(choice) = openai_resp.choices.first() {
+                    let assistant_message = choice.message.content.clone();
+                    self.conversation_history.push_back(Message {
+                        role: "assistant".to_string(),
+                        content: assistant_message.clone(),
+                    });
+
+                    // Ограничиваем историю 10 сообщениями
+                    while self.conversation_history.len() > 10 {
+                        self.conversation_history.pop_front();
                     }
-                    Err(e) => format!("Ошибка парсинга ответа: {}", e),
+
+                    assistant_message
+                } else {
+                    "Нет ответа от OpenAI".to_string()
                 }
             }
-            Err(e) => format!("Ошибка запроса к OpenAI: {}", e),
+            Err(e) => {
+                eprintln!("OpenAI разбор ошибка: {}", e);
+                "Ошибка разбора ответа от OpenAI".to_string()
+            }
         }
     }
 
     fn get_local_response(&self, user_input: &str) -> String {
-        let user_input_lower = user_input.to_lowercase();
-        
-        let greetings = vec!["привет", "здравствуй", "добрый день", "добрый вечер", "доброе утро"];
-        let farewells = vec!["пока", "до свидания", "увидимся", "прощай"];
-        let help_words = vec!["помощь", "помоги", "как", "что", "помочь"];
+        let input_lower = user_input.to_lowercase();
 
-        if greetings.iter().any(|&word| user_input_lower.contains(word)) {
-            return format!("Привет! Я {}, твой помощник. Чем могу помочь?", self.config.clippy_name);
+        // Приветствия
+        if input_lower.contains("привет") || input_lower.contains("здравствуй") {
+            return "Привет! Как дела? Чем я могу тебе помочь?".to_string();
         }
 
-        if farewells.iter().any(|&word| user_input_lower.contains(word)) {
-            return "До свидания! Удачи!".to_string();
+        // Прощание
+        if input_lower.contains("пока") || input_lower.contains("до свидания") {
+            return "До свидания! Удачи тебе!".to_string();
         }
 
-        if help_words.iter().any(|&word| user_input_lower.contains(word)) {
-            return "Я могу помочь с:\n- Ответами на вопросы\n- Подсказками по работе с компьютером\n- Советами по продуктивности\n- И многим другим!\n\nПросто спроси меня о чем угодно!".to_string();
+        // Помощь
+        if input_lower.contains("помощь") || input_lower.contains("помоги") {
+            return "Я могу помочь с:\n• Информацией о погоде\n• Курсами валют\n• Ответами на вопросы\n• Общением и консультациями".to_string();
         }
 
-        if user_input_lower.contains("время") || user_input_lower.contains("час") {
-            use std::time::SystemTime;
-            let now = SystemTime::now();
-            let since_epoch = now.duration_since(std::time::UNIX_EPOCH).unwrap();
-            let hours = (since_epoch.as_secs() / 3600 % 24) as u32;
-            let minutes = (since_epoch.as_secs() / 60 % 60) as u32;
-            return format!("Сейчас примерно {:02}:{:02}", hours, minutes);
+        // Время
+        if input_lower.contains("время") || input_lower.contains("который час") {
+            return "Пожалуйста, посмотрите время в системе.".to_string();
         }
 
-        if user_input_lower.contains("погода") {
-            return "Я не имею доступа к данным о погоде, но рекомендую проверить погодное приложение.".to_string();
-        }
-
-        format!(
-            "Интересный вопрос! К сожалению, мои локальные возможности ограничены. \
-            Для полной функциональности настройте OpenAI API в файле .env\n\n\
-            Но я всегда готов помочь с базовыми вопросами!"
-        )
+        // По умолчанию
+        "Интересный вопрос! Для более полного ответа рекомендую подключить GigaChat API. Могу ли я чем-то ещё помочь?".to_string()
     }
 
     pub fn clear_history(&mut self) {
         self.conversation_history.clear();
+        if let Some(client) = &mut self.gigachat_client {
+            client.clear_history();
+        }
+    }
+
+    pub fn get_history(&self) -> Vec<(String, String)> {
+        self.conversation_history
+            .iter()
+            .map(|m| (m.role.clone(), m.content.clone()))
+            .collect()
     }
 }
-
