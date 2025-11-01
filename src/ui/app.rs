@@ -25,6 +25,8 @@ pub struct ClippyApp {
     pub window_positioned: bool,
     pub chat_visible: bool,
     pub animation_progress: f32,
+    pub weather: super::widgets::WeatherWidget,
+    pub currencies: Vec<super::widgets::CurrencyWidget>,
 }
 
 impl ClippyApp {
@@ -33,6 +35,13 @@ impl ClippyApp {
         let tts = Arc::new(TextToSpeech::new(config.clone()));
         let messages = Vec::new();
         let (sender, receiver) = std_mpsc::channel();
+
+        // Инициализируем виджеты валют
+        let currencies = vec![
+            super::widgets::CurrencyWidget::new("USD", "$", "0.00 ₽"),
+            super::widgets::CurrencyWidget::new("EUR", "€", "0.00 ₽"),
+            super::widgets::CurrencyWidget::new("GBP", "£", "0.00 ₽"),
+        ];
 
         Self {
             config,
@@ -50,6 +59,8 @@ impl ClippyApp {
             window_positioned: false,
             chat_visible: false,
             animation_progress: 0.0,
+            weather: super::widgets::WeatherWidget::default(),
+            currencies,
         }
     }
 
@@ -199,6 +210,65 @@ impl ClippyApp {
             self.animation_progress = 0.0;
             ctx.request_repaint();
         }
+    }
+
+    pub fn draw_widgets_panel(&self, ctx: &egui::Context, chat_rect: egui::Rect) {
+        // Панель виджетов сверху над чатом
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("widgets_panel")));
+
+        let panel_height = 85.0;
+        let panel_rect = egui::Rect::from_min_size(
+            egui::pos2(chat_rect.min.x, chat_rect.min.y - panel_height - 5.0),
+            egui::vec2(chat_rect.width(), panel_height),
+        );
+
+        // Фон панели
+        let bg_color = egui::Color32::from_rgba_unmultiplied(250, 250, 250, 240);
+        painter.rect_filled(panel_rect, 8.0, bg_color);
+
+        // Граница панели
+        let border_color = egui::Color32::from_rgba_unmultiplied(200, 200, 200, 240);
+        painter.rect_stroke(
+            panel_rect,
+            8.0,
+            egui::Stroke::new(1.0, border_color),
+            egui::epaint::StrokeKind::Outside,
+        );
+
+        let alpha = 240u8;
+        let widget_width = super::widgets::WIDGET_WIDTH;
+        let widget_height = super::widgets::WIDGET_HEIGHT;
+        let padding = super::widgets::WIDGET_PADDING;
+        let spacing = super::widgets::WIDGET_SPACING;
+
+        // Погода виджет
+        let weather_x = panel_rect.min.x + padding;
+        let weather_y = panel_rect.min.y + padding;
+        let weather_rect = egui::Rect::from_min_size(
+            egui::pos2(weather_x, weather_y),
+            egui::vec2(widget_width, widget_height),
+        );
+        super::widgets::draw_weather_widget(&painter, weather_rect, alpha, &self.weather);
+
+        // Валюты виджеты
+        for (i, currency) in self.currencies.iter().enumerate() {
+            let currency_x = weather_x + widget_width + spacing + (i as f32) * (widget_width + spacing);
+            let currency_y = weather_y;
+            let currency_rect = egui::Rect::from_min_size(
+                egui::pos2(currency_x, currency_y),
+                egui::vec2(widget_width, widget_height),
+            );
+            super::widgets::draw_currency_widget(&painter, currency_rect, alpha, currency);
+        }
+
+        // Статистика виджет
+        let stats_x = weather_x;
+        let stats_y = weather_y + widget_height + spacing;
+        let stats_rect = egui::Rect::from_min_size(
+            egui::pos2(stats_x, stats_y),
+            egui::vec2(widget_width, widget_height / 1.5),
+        );
+        super::widgets::draw_stats_widget(&painter, stats_rect, alpha, self.messages.len());
     }
 
     pub fn draw_chat_window(&mut self, ctx: &egui::Context, image_rect: egui::Rect) {

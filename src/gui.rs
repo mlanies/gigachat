@@ -138,6 +138,16 @@ impl eframe::App for ClippyApp {
             self.draw_show_button(ctx, rect);
 
             if self.chat_visible {
+                // Вычисляем примерную позицию чата для вывода виджетов
+                let screen_rect = ctx.screen_rect();
+                let chat_x = (rect.min.x - 350.0 - 15.0).max(screen_rect.min.x + 15.0);
+                let chat_y = (rect.center().y - 420.0 / 2.0).max(screen_rect.min.y + 15.0);
+                let chat_rect = egui::Rect::from_min_size(egui::pos2(chat_x, chat_y), egui::vec2(350.0, 420.0));
+
+                // Рисуем панель виджетов
+                self.draw_widgets_panel(ctx, chat_rect);
+
+                // Рисуем окно чата
                 self.draw_chat_window(ctx, rect);
                 self.check_close_chat(ctx);
             }
