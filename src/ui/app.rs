@@ -92,37 +92,35 @@ impl ClippyApp {
         log::info!("📡 Система обновления виджетов инициализирована");
     }
 
-    /// Загружает данные виджетов из API (вызывается при открытии чата)
+    /// Загружает данные виджетов (вызывается при открытии чата)
     pub fn fetch_widget_data(&self) {
         let widget_sender = self.widget_sender.clone();
 
-        // Создаём статические значения для демонстрации
-        // В будущем здесь будут реальные API вызовы через отдельный канал
-        let weather_data = crate::services::WeatherInfo {
-            city: "Москва".to_string(),
-            temperature: 15,
-            description: "Облачно".to_string(),
-            humidity: 65,
-        };
-
-        let rates_data = vec![
-            crate::services::ExchangeRate {
-                currency: "USD".to_string(),
-                rate: 92.5,
-            },
-            crate::services::ExchangeRate {
-                currency: "EUR".to_string(),
-                rate: 101.2,
-            },
-            crate::services::ExchangeRate {
-                currency: "CNY".to_string(),
-                rate: 12.8,
-            },
-        ];
+        // Используем демонстрационные данные с реалистичными значениями
+        // NOTE: В производстве здесь должны быть реальные API вызовы
+        log::info!("📡 Загрузка данных для виджетов...");
 
         let update = WidgetUpdate {
-            weather: Some(weather_data),
-            rates: Some(rates_data),
+            weather: Some(crate::services::WeatherInfo {
+                city: "Москва".to_string(),
+                temperature: 18,
+                description: "Облачно".to_string(),
+                humidity: 62,
+            }),
+            rates: Some(vec![
+                crate::services::ExchangeRate {
+                    currency: "USD".to_string(),
+                    rate: 95.50,
+                },
+                crate::services::ExchangeRate {
+                    currency: "EUR".to_string(),
+                    rate: 104.25,
+                },
+                crate::services::ExchangeRate {
+                    currency: "CNY".to_string(),
+                    rate: 13.15,
+                },
+            ]),
         };
 
         let _ = widget_sender.send(update);
