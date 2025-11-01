@@ -3,6 +3,7 @@ mod agent;
 mod gui;
 mod tts;
 mod talk_cloud;
+mod gigachat;
 
 use config::Config;
 use gui::ClippyApp;
