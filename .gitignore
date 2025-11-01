@@ -1,2 +1,13 @@
 /target
 Cargo.lock
+
+# Phase 2 - SQLite and Logs
+logs/
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.DS_Store
+*.swp
+*.swo

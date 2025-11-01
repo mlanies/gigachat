@@ -5,17 +5,23 @@ mod services;
 mod ui;
 mod core;
 mod gui;
+mod logger;
 
 use config::Config;
 use gui::ClippyApp;
 use eframe::NativeOptions;
 
 fn main() -> Result<(), eframe::Error> {
+    // Инициализируем логирование
+    logger::init();
+    log::info!("🚀 Скрепыш запущен");
+
     // Создаем tokio runtime для async операций
     let rt = tokio::runtime::Runtime::new().unwrap();
     let _guard = rt.enter();
 
     let config = Config::default();
+    log::info!("📁 Конфигурация загружена");
     let clippy_name = config.clippy_name.clone();
 
     let options = NativeOptions {
