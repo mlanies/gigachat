@@ -26,13 +26,15 @@ pub struct ClippyApp {
     greeting_shown: bool, // Флаг, было ли показано приветственное сообщение
     window_positioned: bool, // Флаг, была ли установлена позиция окна
     cloud_visible: bool, // Флаг видимости облака
+    storage_stats: String, // Статистика хранилища
+    show_clear_confirmation: bool, // Показать диалог подтверждения очистки
 }
 
 impl ClippyApp {
     pub fn new(config: Config) -> Self {
         let agent = Arc::new(Mutex::new(ClippyAgent::new(config.clone())));
         let tts = Arc::new(TextToSpeech::new(config.clone()));
-        
+
         let messages = Vec::new();
 
         let (sender, receiver) = std_mpsc::channel();
@@ -53,6 +55,8 @@ impl ClippyApp {
             greeting_shown: false,
             window_positioned: false,
             cloud_visible: true,
+            storage_stats: String::new(),
+            show_clear_confirmation: false,
         }
     }
     
@@ -219,7 +223,31 @@ impl ClippyApp {
         });
     }
 
-    /// Рисует кнопку закрытия облака (маленький белый круг сверху-слева)
+    /// Обновляет статистику хранилища из агента
+    fn update_storage_stats(&mut self) {
+        let agent = Arc::clone(&self.agent);
+
+        let sender = self.response_sender.clone();
+        tokio::spawn(async move {
+            let agent = agent.lock().await;
+            let stats = agent.get_storage_stats();
+            // Отправляем статистику как специальное сообщение (не используется, но можем позже)
+            let _ = sender.send(format!("[stats: {}]", stats));
+        });
+    }
+
+    /// Очищает историю разговора из агента
+    fn clear_agent_history(&mut self) {
+        let agent = Arc::clone(&self.agent);
+        tokio::spawn(async move {
+            let mut agent = agent.lock().await;
+            agent.clear_history();
+        });
+        self.messages.clear();
+        self.show_clear_confirmation = false;
+    }
+
+    /// Рисует кнопку закрытия облака (маленький белый круг сверху-слева) и кнопку очистки истории
     fn draw_close_button(&mut self, ctx: &egui::Context, cloud_rect: egui::Rect) {
         let button_size = 16.0; // размер кнопки (маленький)
         let padding = 6.0; // отступ от края облака
@@ -272,6 +300,147 @@ impl ClippyApp {
                 button_size / 2.0,
                 egui::Stroke::new(1.5, egui::Color32::from_rgb(150, 150, 150)),
             );
+        }
+
+        // Кнопка очистки истории (чуть правее от кнопки закрытия)
+        let clear_button_pos = egui::pos2(
+            cloud_rect.min.x + padding + button_size / 2.0 + button_size + 8.0,
+            cloud_rect.min.y + padding + button_size / 2.0,
+        );
+        let clear_button_rect = egui::Rect::from_center_size(clear_button_pos, egui::vec2(button_size + 4.0, button_size + 4.0));
+
+        if let Some(mouse_pos) = ctx.input(|i| i.pointer.latest_pos()) {
+            if clear_button_rect.contains(mouse_pos) {
+                ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
+
+                if ctx.input(|i| i.pointer.primary_clicked()) {
+                    self.show_clear_confirmation = !self.show_clear_confirmation;
+                    ctx.request_repaint();
+                }
+
+                // Рисуем в состоянии hover (более яркая обводка)
+                painter.circle_filled(clear_button_pos, button_size / 2.0, egui::Color32::from_rgb(220, 100, 100));
+                painter.circle_stroke(
+                    clear_button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(2.0, egui::Color32::from_rgb(150, 50, 50)),
+                );
+            } else {
+                // Нормальное состояние
+                painter.circle_filled(clear_button_pos, button_size / 2.0, egui::Color32::from_rgb(200, 80, 80));
+                painter.circle_stroke(
+                    clear_button_pos,
+                    button_size / 2.0,
+                    egui::Stroke::new(1.5, egui::Color32::from_rgb(150, 50, 50)),
+                );
+            }
+        } else {
+            painter.circle_filled(clear_button_pos, button_size / 2.0, egui::Color32::from_rgb(200, 80, 80));
+            painter.circle_stroke(
+                clear_button_pos,
+                button_size / 2.0,
+                egui::Stroke::new(1.5, egui::Color32::from_rgb(150, 50, 50)),
+            );
+        }
+
+        // Рисуем букву "X" на кнопке очистки
+        let x_size = 4.0;
+        let x_color = egui::Color32::WHITE;
+        painter.line_segment(
+            [
+                egui::pos2(clear_button_pos.x - x_size, clear_button_pos.y - x_size),
+                egui::pos2(clear_button_pos.x + x_size, clear_button_pos.y + x_size),
+            ],
+            egui::Stroke::new(1.5, x_color),
+        );
+        painter.line_segment(
+            [
+                egui::pos2(clear_button_pos.x + x_size, clear_button_pos.y - x_size),
+                egui::pos2(clear_button_pos.x - x_size, clear_button_pos.y + x_size),
+            ],
+            egui::Stroke::new(1.5, x_color),
+        );
+
+        // Показываем диалог подтверждения если требуется
+        if self.show_clear_confirmation {
+            let dialog_pos = egui::pos2(cloud_rect.center().x - 100.0, cloud_rect.min.y - 60.0);
+            let dialog_rect = egui::Rect::from_min_size(dialog_pos, egui::vec2(200.0, 50.0));
+
+            // Фон диалога
+            painter.rect_filled(dialog_rect, 5.0, egui::Color32::from_rgb(40, 40, 40));
+            painter.rect_stroke(dialog_rect, 5.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 100)), egui::epaint::StrokeKind::Outside);
+
+            // Текст подтверждения
+            painter.text(
+                dialog_rect.center() - egui::vec2(0.0, 8.0),
+                egui::Align2::CENTER_CENTER,
+                "Очистить историю?",
+                egui::FontId::proportional(12.0),
+                egui::Color32::WHITE,
+            );
+
+            // Кнопка "Да"
+            let yes_rect = egui::Rect::from_min_size(
+                egui::pos2(dialog_rect.min.x + 10.0, dialog_rect.max.y - 20.0),
+                egui::vec2(35.0, 15.0),
+            );
+            let yes_hovered = ctx.input(|i| i.pointer.latest_pos())
+                .map(|p| yes_rect.contains(p))
+                .unwrap_or(false);
+
+            painter.rect_filled(
+                yes_rect,
+                2.0,
+                if yes_hovered {
+                    egui::Color32::from_rgb(50, 150, 50)
+                } else {
+                    egui::Color32::from_rgb(40, 120, 40)
+                },
+            );
+
+            painter.text(
+                yes_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "Да",
+                egui::FontId::proportional(11.0),
+                egui::Color32::WHITE,
+            );
+
+            if yes_hovered && ctx.input(|i| i.pointer.primary_clicked()) {
+                self.clear_agent_history();
+            }
+
+            // Кнопка "Нет"
+            let no_rect = egui::Rect::from_min_size(
+                egui::pos2(dialog_rect.max.x - 45.0, dialog_rect.max.y - 20.0),
+                egui::vec2(35.0, 15.0),
+            );
+            let no_hovered = ctx.input(|i| i.pointer.latest_pos())
+                .map(|p| no_rect.contains(p))
+                .unwrap_or(false);
+
+            painter.rect_filled(
+                no_rect,
+                2.0,
+                if no_hovered {
+                    egui::Color32::from_rgb(150, 50, 50)
+                } else {
+                    egui::Color32::from_rgb(120, 40, 40)
+                },
+            );
+
+            painter.text(
+                no_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "Нет",
+                egui::FontId::proportional(11.0),
+                egui::Color32::WHITE,
+            );
+
+            if no_hovered && ctx.input(|i| i.pointer.primary_clicked()) {
+                self.show_clear_confirmation = false;
+                ctx.request_repaint();
+            }
         }
     }
 
