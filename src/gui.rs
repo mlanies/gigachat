@@ -39,6 +39,9 @@ impl eframe::App for ClippyApp {
         // Load Clippy image
         self.load_clippy_image(ctx);
 
+        // Start widget data updates (weather, currency rates) - runs once in background
+        self.start_widget_updates(ctx);
+
         // Show greeting message
         if !self.greeting_shown && self.start_time.elapsed().as_secs() >= 3 {
             self.greeting_shown = true;
@@ -69,6 +72,9 @@ impl eframe::App for ClippyApp {
 
             ctx.request_repaint();
         }
+
+        // Process widget updates (weather, currency data) from background tasks
+        self.process_widget_updates();
 
         let mut image_rect: Option<egui::Rect> = None;
 

@@ -63,10 +63,11 @@ impl Default for Config {
             gigachat_api_key,
             openai_api_key,
             use_openai: use_openai_final,
-            // Размер окна для маленькой кнопки (+) и облака чата
+            // Размер окна для маленькой кнопки (+) и облака чата с виджетами
             // Ширина: облако (~350px) + картинка (~133px) + запас (~100px) = ~600px
+            // Высота: виджеты (~85px) + чат (~420px) + Clippy (~200px) + запас = ~750px
             window_width: 600.0,  // Достаточно для кнопки, картинки и облака чата
-            window_height: 300.0 * 2.0 / 3.0, // Высота без изменений
+            window_height: 750.0, // Увеличено для виджетов и чата
             clippy_name,
             animation_speed: 500,
             system_prompt,

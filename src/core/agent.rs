@@ -203,4 +203,18 @@ impl ClippyAgent {
             }
         }
     }
+
+    /// Получает структурированную информацию о погоде для виджета
+    pub async fn get_weather_data(&self, city: &str) -> Result<crate::services::WeatherInfo, String> {
+        self.weather_service.get_weather(city)
+            .await
+            .map_err(|e| format!("Ошибка получения погоды: {}", e))
+    }
+
+    /// Получает структурированную информацию о курсах валют для виджета
+    pub async fn get_currency_data(&self) -> Result<Vec<crate::services::ExchangeRate>, String> {
+        self.currency_service.get_rates()
+            .await
+            .map_err(|e| format!("Ошибка получения курсов: {}", e))
+    }
 }

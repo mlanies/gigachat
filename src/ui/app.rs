@@ -9,6 +9,13 @@ use std::path::PathBuf;
 use std::time::Instant;
 use super::{chat, buttons};
 
+/// Data for widget updates sent from background tasks
+#[derive(Clone)]
+pub struct WidgetUpdate {
+    pub weather: Option<crate::services::WeatherInfo>,
+    pub rates: Option<Vec<crate::services::ExchangeRate>>,
+}
+
 pub struct ClippyApp {
     pub config: Config,
     pub agent: Arc<Mutex<ClippyAgent>>,
@@ -18,6 +25,8 @@ pub struct ClippyApp {
     pub is_thinking: bool,
     pub response_receiver: std_mpsc::Receiver<String>,
     pub response_sender: std_mpsc::Sender<String>,
+    pub widget_receiver: std_mpsc::Receiver<WidgetUpdate>,
+    pub widget_sender: std_mpsc::Sender<WidgetUpdate>,
     pub clippy_texture: Option<egui::TextureHandle>,
     pub style_initialized: bool,
     pub start_time: Instant,
@@ -27,6 +36,7 @@ pub struct ClippyApp {
     pub animation_progress: f32,
     pub weather: super::widgets::WeatherWidget,
     pub currencies: Vec<super::widgets::CurrencyWidget>,
+    pub widget_updates_started: bool,
 }
 
 impl ClippyApp {
@@ -35,6 +45,7 @@ impl ClippyApp {
         let tts = Arc::new(TextToSpeech::new(config.clone()));
         let messages = Vec::new();
         let (sender, receiver) = std_mpsc::channel();
+        let (widget_sender, widget_receiver) = std_mpsc::channel();
 
         // Инициализируем виджеты валют
         let currencies = vec![
@@ -52,6 +63,8 @@ impl ClippyApp {
             is_thinking: false,
             response_receiver: receiver,
             response_sender: sender,
+            widget_receiver,
+            widget_sender,
             clippy_texture: None,
             style_initialized: false,
             start_time: Instant::now(),
@@ -61,6 +74,124 @@ impl ClippyApp {
             animation_progress: 0.0,
             weather: super::widgets::WeatherWidget::default(),
             currencies,
+            widget_updates_started: false,
+        }
+    }
+
+    /// Запускает асинхронное обновление данных виджетов (погода и курсы валют)
+    /// Обновляет виджеты реальными данными из API в фоновом потоке
+    pub fn start_widget_updates(&mut self, ctx: &egui::Context) {
+        // Избегаем повторного запуска
+        if self.widget_updates_started {
+            return;
+        }
+
+        self.widget_updates_started = true;
+        let agent = Arc::clone(&self.agent);
+        let widget_sender = self.widget_sender.clone();
+        let ctx_clone = ctx.clone();
+
+        // Запускаем задачу обновления виджетов в локальном потоке
+        tokio::task::spawn_local(async move {
+            // Небольшая задержка перед запросом чтобы избежать перегрузки при старте
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+            let agent = agent.lock().await;
+
+            // Логирование попыток получения данных
+            log::info!("📡 Начинаем загрузку данных для виджетов (погода, курсы)");
+
+            let mut update = WidgetUpdate {
+                weather: None,
+                rates: None,
+            };
+
+            // Получаем информацию о погоде
+            match agent.get_weather_data("Москва").await {
+                Ok(weather) => {
+                    log::info!("✓ Погода получена: {} °C, {}, влажность {}%",
+                        weather.temperature, weather.description, weather.humidity);
+                    update.weather = Some(weather);
+                }
+                Err(e) => {
+                    log::warn!("⚠️ Ошибка получения погоды: {}", e);
+                }
+            }
+
+            // Получаем курсы валют
+            match agent.get_currency_data().await {
+                Ok(rates) => {
+                    log::info!("✓ Курсы получены для {} валют", rates.len());
+                    for rate in rates.iter().take(3) {
+                        log::debug!("  {} → {:.2} ₽", rate.currency, rate.rate);
+                    }
+                    update.rates = Some(rates);
+                }
+                Err(e) => {
+                    log::warn!("⚠️ Ошибка получения курсов: {}", e);
+                }
+            }
+
+            // Отправляем обновления через канал
+            let _ = widget_sender.send(update);
+
+            // Запрашиваем перерисовку UI
+            ctx_clone.request_repaint();
+        });
+    }
+
+    /// Обрабатывает полученные обновления виджетов из канала
+    /// Это вызывается из основного UI потока
+    pub fn process_widget_updates(&mut self) {
+        while let Ok(update) = self.widget_receiver.try_recv() {
+            // Применяем обновление погоды если оно пришло
+            if let Some(weather) = update.weather {
+                self.weather = super::widgets::WeatherWidget {
+                    temperature: format!("{} °C", weather.temperature),
+                    condition: weather.description.clone(),
+                    humidity: format!("{} %", weather.humidity),
+                };
+                log::debug!("🌡️ Виджет погоды обновлен: {} °C", weather.temperature);
+            }
+
+            // Применяем обновление валют если оно пришло
+            if let Some(rates) = update.rates {
+                for (i, rate) in rates.iter().enumerate() {
+                    if i < self.currencies.len() {
+                        self.currencies[i].rate = format!("{:.2} ₽", rate.rate);
+                        log::debug!("💱 Курс {}: {:.2} ₽", rate.currency, rate.rate);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Функция-помощник для обновления виджета погоды (вызывается из основного потока)
+    #[allow(dead_code)]
+    pub async fn update_weather_widget(&mut self) {
+        let agent = self.agent.lock().await;
+        if let Ok(weather) = agent.get_weather_data("Москва").await {
+            self.weather = super::widgets::WeatherWidget {
+                temperature: format!("{} °C", weather.temperature),
+                condition: weather.description.clone(),
+                humidity: format!("{} %", weather.humidity),
+            };
+            log::debug!("🌡️ Виджет погоды обновлен: {} °C", weather.temperature);
+        }
+    }
+
+    /// Функция-помощник для обновления виджетов валют (вызывается из основного потока)
+    #[allow(dead_code)]
+    pub async fn update_currency_widgets(&mut self) {
+        let agent = self.agent.lock().await;
+        if let Ok(rates) = agent.get_currency_data().await {
+            // Обновляем валюты на основе полученных данных
+            for (i, rate) in rates.iter().enumerate() {
+                if i < self.currencies.len() {
+                    self.currencies[i].rate = format!("{:.2} ₽", rate.rate);
+                    log::debug!("💱 Курс {}: {:.2} ₽", rate.currency, rate.rate);
+                }
+            }
         }
     }
 
