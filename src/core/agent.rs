@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::ai::GigaChatClient;
 use crate::ai::local::LocalAI;
-use crate::services::SQLiteStorage;
+use crate::services::{SQLiteStorage, WeatherService, CurrencyService};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -17,6 +17,8 @@ pub struct ClippyAgent {
     gigachat_client: Option<GigaChatClient>,
     storage: Option<SQLiteStorage>,
     current_model: String,
+    weather_service: WeatherService,
+    currency_service: CurrencyService,
 }
 
 impl ClippyAgent {
@@ -53,6 +55,8 @@ impl ClippyAgent {
             gigachat_client,
             storage,
             current_model: "Local".to_string(),
+            weather_service: WeatherService::new(),
+            currency_service: CurrencyService::new(),
         }
     }
 
@@ -120,7 +124,7 @@ impl ClippyAgent {
         LocalAI::get_response(user_input)
     }
 
-    async fn get_openai_response(&mut self, user_input: &str) -> String {
+    async fn get_openai_response(&mut self, _user_input: &str) -> String {
         // TODO: Реализовать OpenAI интеграцию через модуль ai::openai
         "OpenAI ещё не интегрирован в эту версию.".to_string()
     }
@@ -159,6 +163,44 @@ impl ClippyAgent {
             }
         } else {
             "Хранилище недоступно".to_string()
+        }
+    }
+
+    /// Получает информацию о погоде для города
+    pub async fn get_weather_info(&self, city: &str) -> String {
+        let city_name = if city.trim().is_empty() {
+            "Москва".to_string()
+        } else {
+            city.to_string()
+        };
+
+        log::info!("📡 Запрос погоды для города: {}", city_name);
+
+        match self.weather_service.format_weather_info(&city_name).await {
+            Ok(weather_info) => {
+                log::info!("✓ Погода получена для города: {}", city_name);
+                weather_info
+            }
+            Err(e) => {
+                log::warn!("⚠️ Ошибка получения погоды: {}", e);
+                format!("Извини, не смог получить информацию о погоде в городе '{}'. Ошибка: {}", city_name, e)
+            }
+        }
+    }
+
+    /// Получает информацию о курсах валют
+    pub async fn get_currency_rates(&self) -> String {
+        log::info!("📡 Запрос курсов валют");
+
+        match self.currency_service.format_rates_info().await {
+            Ok(rates_info) => {
+                log::info!("✓ Курсы валют получены");
+                rates_info
+            }
+            Err(e) => {
+                log::warn!("⚠️ Ошибка получения курсов: {}", e);
+                format!("Извини, не смог получить информацию о курсах валют. Ошибка: {}", e)
+            }
         }
     }
 }
