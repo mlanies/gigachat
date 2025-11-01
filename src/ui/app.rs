@@ -193,7 +193,9 @@ impl ClippyApp {
     }
 
     pub fn draw_send_button(&mut self, ctx: &egui::Context, image_rect: egui::Rect) {
+        log::debug!("🔘 Drawing send button at position: {:?}", image_rect.max);
         if buttons::draw_send_button(ctx, image_rect) {
+            log::debug!("🔘 Send button clicked!");
             if !self.chat_visible {
                 self.chat_visible = true;
                 self.animation_progress = 0.0;

@@ -13,9 +13,6 @@ pub fn draw_send_button(
     ctx: &egui::Context,
     image_rect: egui::Rect,
 ) -> bool {
-    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("send_button")));
-
-    // Кнопка справа от Clippy
     let button_pos = egui::pos2(
         image_rect.max.x + BUTTON_PADDING,
         image_rect.center().y - BUTTON_SIZE / 2.0,
@@ -34,6 +31,7 @@ pub fn draw_send_button(
         egui::Color32::from_rgb(40, 150, 100)
     };
 
+    let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("send_button")));
     painter.rect_filled(button_rect, 8.0, button_color);
 
     // Стрелка вверх

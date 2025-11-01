@@ -134,12 +134,15 @@ impl eframe::App for ClippyApp {
 
         // Render send button and chat window if image was loaded
         if let Some(rect) = image_rect {
+            log::debug!("📍 Image rect: min={:?}, max={:?}", rect.min, rect.max);
             self.draw_send_button(ctx, rect);
 
             if self.chat_visible {
                 self.draw_chat_window(ctx, rect);
                 self.check_close_chat(ctx);
             }
+        } else {
+            log::debug!("❌ No image rect available for button drawing");
         }
     }
 }
