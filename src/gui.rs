@@ -89,13 +89,8 @@ impl eframe::App for ClippyApp {
                         let image_size = egui::vec2(size.x * scale, size.y * scale);
                         let (rect, response) = ui.allocate_exact_size(image_size, egui::Sense::drag());
 
-                        let clip_rect = ui.clip_rect();
-                        let screen_rect = ctx.screen_rect();
-                        let offset = screen_rect.min - clip_rect.min;
-                        let screen_image_rect = egui::Rect::from_min_size(
-                            rect.min + offset,
-                            image_size,
-                        );
+                        // Convert to screen coordinates by using the rect directly as it's already in screen space
+                        let screen_image_rect = rect;
 
                         image_rect = Some(screen_image_rect);
 
