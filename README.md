@@ -1,6 +1,6 @@
 # 🤖 Скрепыш - AI Персональный Помощник
 
-Интерактивный персональный помощник на Rust с интегрированным Yandex GigaChat API.
+Интерактивный персональный помощник на Rust с интегрированным Sber GigaChat API.
 
 ## 📋 Возможности
 
@@ -23,7 +23,7 @@
 ```
 src/
 ├── ai/                      # AI провайдеры
-│   ├── gigachat.rs         # Yandex GigaChat API клиент
+│   ├── gigachat.rs         # Sber GigaChat API клиент
 │   ├── openai.rs           # OpenAI API клиент (fallback)
 │   ├── local.rs            # Локальные правила (fallback)
 │   └── mod.rs              # Публичный API модуля
@@ -94,7 +94,7 @@ cargo run --release
 ### Переменные окружения
 
 **GigaChat (основной AI):**
-- `GIGACHAT_API_KEY` - API ключ Yandex GigaChat
+- `GIGACHAT_API_KEY` - API ключ Sber GigaChat
 - `GIGACHAT_MODEL` - Модель (default: "GigaChat:latest")
 - `GIGACHAT_TEMPERATURE` - Температура (0.0-1.0, default: 0.7)
 - `GIGACHAT_MAX_TOKENS` - Макс. токенов (default: 500)
