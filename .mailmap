@@ -1,0 +1,7 @@
+# .mailmap файл для маппинга авторов коммитов
+# GitHub использует этот файл для отображения Contributors
+# Формат: Правильное имя <правильный email> <старый email или имя>
+
+Maksim Lanies <91416159+mlanies@users.noreply.github.com> claude <claude@example.com>
+Maksim Lanies <91416159+mlanies@users.noreply.github.com> Claude
+Maksim Lanies <91416159+mlanies@users.noreply.github.com> <claude@users.noreply.github.com>
