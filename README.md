@@ -9,7 +9,7 @@
 
 ## Демонстрация
 
-[![Демонстрация работы приложения](./assets/demo-preview.png)](https://github.com/mlanies/gigachat/raw/main/assets/demo.mp4)
+[![Демонстрация работы приложения](./assets/demo-preview.png)](https://github.com/user-attachments/assets/63797c94-6b17-4734-81ba-ef751fc35f7d)
 
 > Нажмите на изображение выше, чтобы просмотреть демонстрационное видео. Видео показывает основные возможности приложения - взаимодействие с Clippy, открытие чата, виджеты погоды и валют.
 
