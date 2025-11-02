@@ -1,5 +1,10 @@
 # Gigachat - AI Персональный Помощник
 
+[![Rust](https://img.shields.io/badge/Rust-1.70+-orange)](https://www.rust-lang.org/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![egui](https://img.shields.io/badge/GUI-egui%200.32-green)](https://github.com/emilk/egui)
+[![GigaChat](https://img.shields.io/badge/AI-GigaChat-purple)](https://developers.sber.ru/portal/products/gigachat)
+
 Интерактивный персональный помощник на Rust с интегрированным Sber GigaChat API.
 
 ## Демонстрация
